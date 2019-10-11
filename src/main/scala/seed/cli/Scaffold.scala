@@ -554,16 +554,16 @@ class Scaffold(log: Log, silent: Boolean = false) {
     Root(List(
       NamedTable(
         List("project"),
-        Map("scalaVersion" -> Str(jvmScalaVersion)) ++
-        (if (organisation == Organisation.Lightbend) Map()
-         else Map("scalaOrganisation" -> Str(organisation.packageName))) ++
-        (if (scalaJsVersion.isEmpty) Map()
-         else Map("scalaJsVersion" -> Str(scalaJsVersion.get))) ++
-        (if (scalaNativeVersion.isEmpty) Map() else
-         Map("scalaNativeVersion" -> Str(scalaNativeVersion.get))
+        List("scalaVersion" -> Str(jvmScalaVersion)) ++
+        (if (organisation == Organisation.Lightbend) List()
+         else List("scalaOrganisation" -> Str(organisation.packageName))) ++
+        (if (scalaJsVersion.isEmpty) List()
+         else List("scalaJsVersion" -> Str(scalaJsVersion.get))) ++
+        (if (scalaNativeVersion.isEmpty) List() else
+         List("scalaNativeVersion" -> Str(scalaNativeVersion.get))
         ) ++ (
-          if (testFrameworks.isEmpty) Map()
-          else Map(
+          if (testFrameworks.isEmpty) List()
+          else List(
             "testFrameworks" -> Arr(
               testFrameworks.map(tf => Str(tf.mainClass)).toList
             )
@@ -574,7 +574,7 @@ class Scaffold(log: Log, silent: Boolean = false) {
     (if (platforms.size == 1) List() else List(
       NamedTable(
         List("module", moduleName),
-        Map(
+        List(
           "root" -> Str("shared"),
           "sources" -> Arr(List(Str("shared/src"))),
           "targets" -> Arr(
@@ -587,19 +587,19 @@ class Scaffold(log: Log, silent: Boolean = false) {
       else List(
         NamedTable(
           List("module", moduleName, "test"),
-          Map("sources" -> Arr(List(Str("shared/test"))))
+          List("sources" -> Arr(List(Str("shared/test"))))
         )
       )
     )) ++
     (if (scalaJsVersion.isEmpty) List() else List(
       NamedTable(
         List("module", moduleName, "js"),
-        Map("root" -> Str("js")) ++
+        List("root" -> Str("js")) ++
         (if (
           jsScalaVersion.isDefined && !jsScalaVersion.contains(jvmScalaVersion)
-         ) Map("scalaVersion" -> Str(jsScalaVersion.get)) else Map()
+         ) List("scalaVersion" -> Str(jsScalaVersion.get)) else List()
         ) ++
-        Map(
+        List(
           "sources" -> Arr(List(
             if (platforms.size == 1) Str("src") else Str("js/src")
           ))
@@ -610,7 +610,7 @@ class Scaffold(log: Log, silent: Boolean = false) {
       else List(
         NamedTable(
           List("module", moduleName, "test", "js"),
-          Map(
+          List(
             "sources" -> Arr(List(
               if (platforms.size == 1) Str("test") else Str("js/test")
             ))
@@ -621,7 +621,7 @@ class Scaffold(log: Log, silent: Boolean = false) {
     (if (!platforms.contains(JVM)) List() else List(
       NamedTable(
         List("module", moduleName, "jvm"),
-        Map(
+        List(
           "root" -> Str("jvm"),
           "sources" -> Arr(List(
             if (platforms.size == 1) Str("src") else Str("jvm/src")
@@ -633,7 +633,7 @@ class Scaffold(log: Log, silent: Boolean = false) {
       else List(
         NamedTable(
           List("module", moduleName, "test", "jvm"),
-          Map(
+          List(
             "sources" -> Arr(List(
               if (platforms.size == 1) Str("test") else Str("jvm/test")
             ))
@@ -644,12 +644,12 @@ class Scaffold(log: Log, silent: Boolean = false) {
     (if (scalaNativeVersion.isEmpty) List() else List(
       NamedTable(
         List("module", moduleName, "native"),
-        Map("root" -> Str("native")) ++
+        List("root" -> Str("native")) ++
         (if (
           nativeScalaVersion.isDefined &&
           !nativeScalaVersion.contains(jvmScalaVersion)
-         ) Map("scalaVersion" -> Str(nativeScalaVersion.get)) else Map()
-        ) ++ Map(
+         ) List("scalaVersion" -> Str(nativeScalaVersion.get)) else List()
+        ) ++ List(
           "sources" -> Arr(List(
             if (platforms.size == 1) Str("src") else Str("native/src")
           ))
@@ -660,7 +660,7 @@ class Scaffold(log: Log, silent: Boolean = false) {
       else List(
         NamedTable(
           List("module", moduleName, "test", "native"),
-          Map(
+          List(
             "sources" -> Arr(List(
               if (platforms.size == 1) Str("test") else Str("native/test")
             ))

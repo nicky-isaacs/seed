@@ -44,18 +44,17 @@ libraryDependencies ++= Seq(
   "com.lihaoyi"           %% "fansi"          % "0.2.7",
   "io.get-coursier"       %% "coursier"       % bloopCoursierVersion,
   "io.get-coursier"       %% "coursier-cache" % bloopCoursierVersion,
-  "tech.sparse"           %% "toml-scala"     % "0.2.0",
-  "tech.sparse"           %% "pine"           % "0.1.4",
+  "tech.sparse"           %% "toml-scala"     % "0.2.2",
+  "tech.sparse"           %% "pine"           % "0.1.6",
   "ch.epfl.scala"         %% "bloop-config"   % bloopVersion,
   "com.joefkelley"        %% "argyle"         % "1.0.0",
   "org.scalaj"            %% "scalaj-http"    % "2.4.2",
-  "dev.zio"               %% "zio"            % "1.0.0-RC10-1",
-  "io.circe"              %% "circe-core"     % "0.11.1",
+  "dev.zio"               %% "zio"            % "1.0.0-RC14",
   "commons-io"            % "commons-io"      % "2.6",
   "com.zaxxer"            % "nuprocess"       % "1.2.4",
   "org.java-websocket"    % "Java-WebSocket"  % "1.4.0",
-  "org.slf4j"             % "slf4j-simple"    % "2.0.0-alpha0",
-  "io.monix"              %% "minitest"       % "2.5.0" % "test",
+  "org.slf4j"             % "slf4j-simple"    % "2.0.0-alpha1",
+  "io.monix"              %% "minitest"       % "2.7.0" % "test",
   scalaOrganization.value % "scala-reflect"   % scalaVersion.value
 )
 
