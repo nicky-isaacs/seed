@@ -73,7 +73,7 @@ object BloopIntegrationSpec extends TestSuite[Unit] {
       resolvers,
       build,
       Command.Bloop(packageConfig),
-      Log.urgent
+      Log.debug
     )
 
     val bloopBuildPath = buildPath.resolve("build").resolve("bloop")
@@ -112,7 +112,7 @@ object BloopIntegrationSpec extends TestSuite[Unit] {
       resolvers,
       build,
       Command.Bloop(packageConfig),
-      Log.urgent
+      Log.debug
     )
     compileAndRun(buildPath)
   }
@@ -132,7 +132,7 @@ object BloopIntegrationSpec extends TestSuite[Unit] {
         resolvers,
         build,
         Command.Bloop(packageConfig),
-        Log.urgent
+        Log.debug
       )
       compileAndRun(buildPath)
   }
@@ -358,7 +358,7 @@ object BloopIntegrationSpec extends TestSuite[Unit] {
       resolvers,
       build,
       Command.Bloop(packageConfig),
-      Log.urgent
+      Log.debug
     )
 
     TestProcessHelper

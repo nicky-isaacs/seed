@@ -20,7 +20,7 @@ object TestProcessHelper {
   def runBloop(cwd: Path)(args: String*): Future[String] = {
     val sb = new StringBuilder
     val process =
-      ProcessHelper.runBloop(cwd, Log.urgent, out => sb.append(out + "\n"))(
+      ProcessHelper.runBloop(cwd, Log.debug, out => sb.append(out + "\n"))(
         args: _*
       )
     RTS.unsafeRunToFuture(process).map(_ => sb.toString)
