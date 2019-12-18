@@ -113,7 +113,7 @@ object ProcessHelper {
   )(args: String*): Process =
     runCommmand(
       cwd,
-      List("bloop") ++ args ++ List("--verbose"),
+      List("bloop") ++ args,
       modulePath,
       buildPath,
       log,
