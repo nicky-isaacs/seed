@@ -79,9 +79,11 @@ class Scaffold(log: Log, silent: Boolean = false) {
     log.info(
       s"${Ansi.italic("Which platform(s) do you want to support?")} [default: ${Ansi.underlined("1, 2")}]"
     )
-    log.detail(s"${Ansi.bold("1.")} JVM")
-    log.detail(s"${Ansi.bold("2.")} JavaScript")
-    log.detail(s"${Ansi.bold("3.")} Native (${Ansi.italic("experimental")})")
+    log.infoHighlight(s"${Ansi.bold("1.")} JVM")
+    log.infoHighlight(s"${Ansi.bold("2.")} JavaScript")
+    log.infoHighlight(
+      s"${Ansi.bold("3.")} Native (${Ansi.italic("experimental")})"
+    )
 
     readInput[Set[Platform]](
       Set(JVM, JavaScript),
@@ -102,10 +104,10 @@ class Scaffold(log: Log, silent: Boolean = false) {
     log.info(
       s"${Ansi.italic("Which test framework(s) do you need?")} [default: ${Ansi.underlined("none")}]"
     )
-    log.detail(s"${Ansi.bold("1.")} minitest")
-    log.detail(s"${Ansi.bold("2.")} ScalaTest")
-    log.detail(s"${Ansi.bold("3.")} ScalaCheck")
-    log.detail(s"${Ansi.bold("4.")} µTest")
+    log.infoHighlight(s"${Ansi.bold("1.")} minitest")
+    log.infoHighlight(s"${Ansi.bold("2.")} ScalaTest")
+    log.infoHighlight(s"${Ansi.bold("3.")} ScalaCheck")
+    log.infoHighlight(s"${Ansi.bold("4.")} µTest")
 
     import TestFramework._
     readInput[Set[TestFramework]](
@@ -594,7 +596,7 @@ class Scaffold(log: Log, silent: Boolean = false) {
     (if (scalaJsVersion.isEmpty) List() else List(
       NamedTable(
         List("module", moduleName, "js"),
-        List("root" -> Str("js")) ++
+        List("root" -> (if (platforms.size == 1) Str(".") else Str("js"))) ++
         (if (
           jsScalaVersion.isDefined && !jsScalaVersion.contains(jvmScalaVersion)
          ) List("scalaVersion" -> Str(jsScalaVersion.get)) else List()
@@ -622,7 +624,7 @@ class Scaffold(log: Log, silent: Boolean = false) {
       NamedTable(
         List("module", moduleName, "jvm"),
         List(
-          "root" -> Str("jvm"),
+          "root" -> (if (platforms.size == 1) Str(".") else Str("jvm")),
           "sources" -> Arr(List(
             if (platforms.size == 1) Str("src") else Str("jvm/src")
           ))
@@ -644,7 +646,7 @@ class Scaffold(log: Log, silent: Boolean = false) {
     (if (scalaNativeVersion.isEmpty) List() else List(
       NamedTable(
         List("module", moduleName, "native"),
-        List("root" -> Str("native")) ++
+        List("root" -> (if (platforms.size == 1) Str(".") else Str("native"))) ++
         (if (
           nativeScalaVersion.isDefined &&
           !nativeScalaVersion.contains(jvmScalaVersion)

@@ -2,7 +2,8 @@ package seed.config
 
 import java.nio.file.{Files, Path}
 
-import seed.cli.util.{Ansi, ColourScheme}
+import org.apache.commons.io.FileUtils
+import seed.cli.util.{Ansi, ColourScheme, Watcher}
 import seed.model.Build.{JavaDep, Module, ScalaDep}
 import seed.model.Platform.{JVM, JavaScript, Native}
 import seed.model.{Build, Organisation, Platform, TomlBuild}
@@ -287,13 +288,27 @@ object BuildConfig {
       hasCycle(name, Set())
     }
 
-    val incompatibleModuleDepPlatform =
-      module.moduleDeps
-        .flatMap { name =>
-          build.get(name).map(m => name -> m.module)
-        }
-        .map { case (n, m) => (n, module.targets.diff(m.targets)) }
-        .find(_._2.nonEmpty)
+    // Check whether platforms are missing on the given module's dependencies
+    val missingModuleDepPlatform: Option[(String, Platform)] = {
+
+      /** @return None if module has custom build targets */
+      def resolveModule(name: String) =
+        build.get(name).map(m => name -> m.module).filter(_._2.target.isEmpty)
+
+      def platform(p: Platform) =
+        platformModule(module, p).flatMap(
+          _.moduleDeps.flatMap(resolveModule).collectFirst {
+            case (name, module) if !module.targets.contains(p) => (name, p)
+          }
+        )
+
+      // Compatibility must be checked for all platform-specific modules
+      // separately since these may depend on additional modules which are not
+      // included on the base module
+      platform(JVM)
+        .orElse(platform(JavaScript))
+        .orElse(platform(Native))
+    }
 
     val moduleName = Ansi.italic(name)
 
@@ -389,12 +404,10 @@ object BuildConfig {
       error(s"Module $moduleName cannot depend on itself")
     else if (cyclicModuleDep2)
       error(s"Cycle detected in dependencies of module $moduleName")
-    else if (incompatibleModuleDepPlatform.isDefined)
+    else if (missingModuleDepPlatform.isDefined)
       error(
-        s"Module ${Ansi.italic(incompatibleModuleDepPlatform.get._1)} has missing target platform(s) (${incompatibleModuleDepPlatform.get._2
-          .map(_.id)
-          .map(Ansi.italic)
-          .mkString(", ")}) required by $moduleName"
+        s"Module ${Ansi.italic(missingModuleDepPlatform.get._1)} has missing target platform ${Ansi
+          .italic(missingModuleDepPlatform.get._2.id)} required by $moduleName"
       )
     else true
   }
@@ -414,17 +427,21 @@ object BuildConfig {
   def targetName(build: Build, name: String, platform: Platform): String =
     if (!isCrossBuild(build(name).module)) name else name + "-" + platform.id
 
-  def buildTargets(build: Build, module: String): List[String] = {
-    val m = build(module).module
-    val p = m.targets
-    p.map(p => targetName(build, module, p))
-  }
-
-  def linkTargets(build: Build, module: String): List[String] = {
+  def linkTargets(build: Build, module: String): List[(String, Platform)] = {
     val m = build(module).module
     val p = m.targets.diff(List(JVM))
-    p.map(p => targetName(build, module, p))
+    p.map((module, _))
   }
+
+  /** @return Unique paths including invalid ones */
+  def sourcePaths(build: Build, modules: List[(String, Platform)]): List[Path] =
+    modules.flatMap {
+      case (module, platform) =>
+        val m = build(module).module
+        val pmSources =
+          platformModule(m, platform).map(_.sources).getOrElse(List())
+        m.sources ++ pmSources
+    }.distinct
 
   def targetsFromPlatformModules(module: Build.Module): List[Platform] =
     (if (module.jvm.nonEmpty) List(JVM) else List()) ++
@@ -488,28 +505,33 @@ object BuildConfig {
   def collectJsModuleDeps(modules: Build, module: Module): List[String] =
     module.moduleDeps.flatMap(
       m =>
-        m +: modules(m).module.js.toList
-          .flatMap(collectJsModuleDeps(modules, _))
+        modules(m).module.js.toList
+          .flatMap(collectJsModuleDeps(modules, _)) :+ m
     )
 
   def collectNativeModuleDeps(build: Build, module: Module): List[String] =
     module.moduleDeps.flatMap(
       m =>
-        m +: build(m).module.native.toList
-          .flatMap(collectNativeModuleDeps(build, _))
+        build(m).module.native.toList
+          .flatMap(collectNativeModuleDeps(build, _)) :+ m
     )
 
   def collectJvmModuleDeps(build: Build, module: Module): List[String] =
     module.moduleDeps.flatMap(
       m =>
-        m +: build(m).module.jvm.toList.flatMap(collectJvmModuleDeps(build, _))
+        build(m).module.jvm.toList.flatMap(collectJvmModuleDeps(build, _)) :+ m
     )
 
   def collectSharedModuleDeps(build: Build, module: Module): List[String] =
     module.moduleDeps.flatMap(
-      m => m +: collectSharedModuleDeps(build, build(m).module)
+      m => collectSharedModuleDeps(build, build(m).module) :+ m
     )
 
+  /**
+    * Returns complete list of transitive module dependencies using DFS ordering
+    *
+    * @note Result includes custom build targets
+    */
   def collectModuleDeps(
     build: Build,
     module: Module,
@@ -540,20 +562,55 @@ object BuildConfig {
       .flatMap(p => collectModuleDepsBase(build, module, p))
       .distinct
 
+  def modulesWithSources(
+    build: Build,
+    modules: List[(String, Platform)]
+  ): List[(String, Platform)] =
+    modules.filter { m =>
+      val paths = sourcePaths(build, List(m))
+      paths.exists(
+        p =>
+          Files.exists(p) && !FileUtils
+            .listFiles(p.toFile, Watcher.Extensions, true)
+            .isEmpty
+      )
+    }
+
+  /** Transitively resolve modules with Scala source files */
+  def expandModules(
+    build: Build,
+    modules: List[(String, Platform)]
+  ): List[(String, Platform)] =
+    modulesWithSources(
+      build,
+      modules.flatMap {
+        case (m, p) =>
+          (BuildConfig
+            .collectModuleDeps(
+              build,
+              BuildConfig.platformModule(build(m).module, p).get,
+              p
+            )
+            .filter(
+              d =>
+                // Not the case for custom targets
+                build(d).module.targets.contains(p)
+            ) :+ m).map((_, p))
+      }.distinct
+    )
+
   def collectJsClassPath(
     buildPath: Path,
     build: Build,
     module: Module
   ): List[Path] =
     module.moduleDeps
-      .filter(name => hasTarget(build, name, Platform.JavaScript))
       .flatMap(
         name =>
-          buildPath
-            .resolve(targetName(build, name, JavaScript)) +: collectJsClassPath(
-            buildPath,
-            build,
-            build(name).module
+          build(name).module.js.toList.flatMap(
+            js =>
+              buildPath.resolve(targetName(build, name, JavaScript)) +:
+                collectJsClassPath(buildPath, build, js)
           )
       )
       .distinct
@@ -564,14 +621,12 @@ object BuildConfig {
     module: Module
   ): List[Path] =
     module.moduleDeps
-      .filter(name => hasTarget(build, name, Platform.Native))
       .flatMap(
         name =>
-          buildPath
-            .resolve(targetName(build, name, Native)) +: collectNativeClassPath(
-            buildPath,
-            build,
-            build(name).module
+          build(name).module.native.toList.flatMap(
+            native =>
+              buildPath.resolve(targetName(build, name, Native)) +:
+                collectNativeClassPath(buildPath, build, native)
           )
       )
       .distinct
@@ -582,15 +637,13 @@ object BuildConfig {
     module: Module
   ): List[Path] =
     module.moduleDeps
-      .filter(name => hasTarget(build, name, Platform.JVM))
       .flatMap(
         name =>
-          buildPath.resolve(targetName(build, name, JVM)) +:
-            collectJvmClassPath(
-              buildPath,
-              build,
-              build(name).module
-            )
+          build(name).module.jvm.toList.flatMap(
+            jvm =>
+              buildPath.resolve(targetName(build, name, JVM)) +:
+                collectJvmClassPath(buildPath, build, jvm)
+          )
       )
       .distinct
 

@@ -16,6 +16,11 @@ object TomlUtils {
 
   object Codecs {
     implicit val logLevelCodec: Codec[LogLevel] = Codec {
+      case (Value.Str(level), _, _) if level == "detail" =>
+        Log.urgent.error(
+          "The log level 'detail' was deprecated. Using 'info' instead..."
+        )
+        Right(LogLevel.Info)
       case (Value.Str(level), _, _) =>
         LogLevel.All.get(level) match {
           case None =>
@@ -117,11 +122,11 @@ object TomlUtils {
             log.error(
               s"The $description ${Ansi.italic(path.toString)} is malformed"
             )
-            log.detail(s"${Ansi.bold("Message:")} $message")
+            log.error(s"${Ansi.bold("Message:")} $message", detail = true)
 
             if (address.nonEmpty) {
               val trace = address.map(Ansi.italic).mkString(" → ")
-              log.detail(s"${Ansi.bold("Trace:")} $trace")
+              log.error(s"${Ansi.bold("Trace:")} $trace", detail = true)
             }
 
             None

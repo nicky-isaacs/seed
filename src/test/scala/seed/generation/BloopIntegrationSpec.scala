@@ -6,7 +6,7 @@ import bloop.config.ConfigCodecs
 import bloop.config.Config.JsConfig
 import minitest.TestSuite
 import org.apache.commons.io.FileUtils
-import seed.{Log, cli}
+import seed.{Log, LogLevel, cli}
 import seed.Cli.{Command, PackageConfig}
 import seed.cli.util.RTS
 import seed.config.BuildConfig
@@ -16,6 +16,8 @@ import seed.model.Config
 
 import scala.concurrent.Future
 import seed.generation.util.BuildUtil.tempPath
+
+import scala.collection.mutable.ListBuffer
 
 object BloopIntegrationSpec extends TestSuite[Unit] {
   override def setupSuite(): Unit    = TestProcessHelper.semaphore.acquire()
@@ -274,14 +276,13 @@ object BloopIntegrationSpec extends TestSuite[Unit] {
   def buildCustomTarget(
     name: String,
     expectFailure: Boolean = false
-  ): Future[Unit] = {
+  ): Future[List[String]] = {
     val path = Paths.get(s"test/$name")
 
     val config = BuildConfig.load(path, Log.urgent).get
     import config._
     val buildPath = tempPath.resolve(name)
     Files.createDirectory(buildPath)
-    val generatedFile = projectPath.resolve("demo").resolve("Generated.scala")
     cli.Generate.ui(
       Config(),
       projectPath,
@@ -292,21 +293,30 @@ object BloopIntegrationSpec extends TestSuite[Unit] {
       Log.urgent
     )
 
+    val lines = ListBuffer[String]()
+
     val result = seed.cli.Build.build(
       path,
       Some(buildPath),
       List("demo"),
       watch = false,
       tmpfs = false,
-      if (expectFailure) Log.silent else Log.urgent,
-      _ => _ => ()
+      progress = false,
+      new Log(lines += _, identity, LogLevel.Warn, false),
+      stdOut => lines ++= stdOut.split('\n'),
+      _ => ()
     )
 
     val uio = result.right.get
 
-    if (expectFailure) RTS.unsafeRunToFuture(uio).failed.map(_ => ())
-    else {
+    if (expectFailure)
+      RTS.unsafeRunToFuture(uio).failed.map { _ =>
+        assert(lines.nonEmpty)
+        lines.toList
+      } else {
       RTS.unsafeRunSync(uio)
+
+      val generatedFile = projectPath.resolve("demo").resolve("Generated.scala")
       assert(Files.exists(generatedFile))
 
       TestProcessHelper
@@ -314,12 +324,14 @@ object BloopIntegrationSpec extends TestSuite[Unit] {
         .map { x =>
           assertEquals(x.split("\n").count(_ == "42"), 1)
           Files.delete(generatedFile)
+          assertEquals(lines.toList, List())
+          List()
         }
     }
   }
 
   testAsync("Build project with custom class target") { _ =>
-    buildCustomTarget("custom-class-target")
+    buildCustomTarget("custom-class-target").map(_ => ())
   }
 
   testAsync("Build project with custom command target") { _ =>
@@ -343,6 +355,17 @@ object BloopIntegrationSpec extends TestSuite[Unit] {
 
   testAsync("Build project with failing custom command target") { _ =>
     buildCustomTarget("custom-command-target-fail", expectFailure = true)
+      .map(_ => ())
+  }
+
+  testAsync("Build project with failing compilation") { _ =>
+    buildCustomTarget("compilation-failure", expectFailure = true).map(
+      log =>
+        // Must indicate correct position
+        assert(
+          log.exists(_.contains("[2:41]: not found: value invalidIdentifier"))
+        )
+    )
   }
 
   testAsync("Generate non-JVM project") { _ =>
@@ -369,5 +392,37 @@ object BloopIntegrationSpec extends TestSuite[Unit] {
         assert(lines.contains("js"))
         assert(lines.contains("native"))
       }
+  }
+
+  test("Inherit classpaths of platform-specific base modules") { _ =>
+    val result = BuildConfig
+      .load(Paths.get("test").resolve("platform-module-deps"), Log.urgent)
+      .get
+    val buildPath = tempPath.resolve("platform-module-deps-bloop")
+    Files.createDirectory(buildPath)
+    cli.Generate.ui(
+      Config(),
+      result.projectPath,
+      buildPath,
+      result.resolvers,
+      result.build,
+      Command.Bloop(packageConfig),
+      Log.urgent
+    )
+
+    val bloopBuildPath = buildPath.resolve("build").resolve("bloop")
+
+    val bloopPath = buildPath.resolve(".bloop")
+
+    val root  = readBloopJson(bloopPath.resolve("example.json"))
+    val paths = root.project.classpath.filter(_.startsWith(buildPath))
+
+    assertEquals(
+      paths,
+      List(
+        bloopBuildPath.resolve("base"),
+        bloopBuildPath.resolve("core")
+      )
+    )
   }
 }

@@ -675,11 +675,60 @@ object BuildConfigSpec extends SimpleTestSuite {
     assert(
       messages.exists(
         _.contains(
-          s"Module ${Ansi.italic("foo")} has missing target platform(s) (${Ansi
-            .italic("native")}) required by ${Ansi.italic("bar")}"
+          s"Module ${Ansi.italic("foo")} has missing target platform ${Ansi
+            .italic("native")} required by ${Ansi.italic("bar")}"
         )
       )
     )
+  }
+
+  test("Platform compatibility when inheriting (2)") {
+    val buildToml = """
+      |[project]
+      |scalaJsVersion     = "0.6.26"
+      |scalaNativeVersion = "0.3.7"
+      |
+      |[module.foo.js]
+      |scalaVersion = "2.11.11"
+      |sources      = ["foo/"]
+      |
+      |[module.bar.native]
+      |scalaVersion = "2.11.11"
+      |moduleDeps   = ["foo"]
+      |sources      = ["bar/"]
+    """.stripMargin
+
+    val messages = ListBuffer[String]()
+    val log      = new Log(messages += _, identity, LogLevel.Error, false)
+    parseBuild(buildToml, log, fail = true)(_ => "")
+    assert(
+      messages.exists(
+        _.contains(
+          s"Module ${Ansi.italic("foo")} has missing target platform ${Ansi
+            .italic("native")} required by ${Ansi.italic("bar")}"
+        )
+      )
+    )
+  }
+
+  test("Custom build targets do not need to set any platforms") {
+    val buildToml = """
+      |[project]
+      |scalaVersion = "2.11.11"
+      |
+      |[module.template.target.scss]
+      |root    = "scss"
+      |command = "yarn install && yarn run gulp"
+      |
+      |[module.app.jvm]
+      |moduleDeps = ["template"]
+      |sources    = ["src/"]
+    """.stripMargin
+
+    val messages = ListBuffer[String]()
+    val log      = new Log(messages += _, identity, LogLevel.Error, false)
+    val build    = parseBuild(buildToml, log)(_ => "")
+    assertEquals(build("app").module.targets, List(JVM))
   }
 
   test("Scala version compatibility") {
@@ -817,6 +866,86 @@ object BuildConfigSpec extends SimpleTestSuite {
           s"Cycle detected in dependencies of module ${Ansi.italic("a")}"
         )
       )
+    )
+  }
+
+  test("Resolve source paths") {
+    val buildToml = """
+      |[project]
+      |scalaVersion = "2.11.11"
+      |scalaJsVersion     = "0.6.26"
+      |
+      |[module.bar2.js]
+      |sources = ["src/main/scala/"]
+      |
+      |[module.bar.js]
+      |sources = ["src/main/scala/"]
+      |
+      |[module.foo.js]
+      |sources = ["invalid-path/", "test.scala"]
+    """.stripMargin
+
+    val build = parseBuild(buildToml, Log.urgent)(_ => "")
+
+    assertEquals(
+      BuildConfig
+        .sourcePaths(
+          build,
+          List(("bar2", JavaScript), ("bar", JavaScript), ("foo", JavaScript))
+        ),
+      List("src/main/scala/", "invalid-path/", "test.scala").map(Paths.get(_))
+    )
+  }
+
+  test("Expand modules") {
+    val buildToml = """
+      |[project]
+      |scalaJsVersion     = "0.6.26"
+      |scalaNativeVersion = "0.3.7"
+      |
+      |[module.base2]
+      |scalaVersion = "2.11.11"
+      |sources      = ["src/main/scala/"]
+      |targets      = ["js", "native"]
+      |
+      |[module.base]
+      |scalaVersion = "2.11.11"
+      |moduleDeps   = ["base2"]
+      |sources      = ["src/main/scala/"]
+      |targets      = ["js", "native"]
+      |
+      |[module.foo]
+      |scalaVersion = "2.11.11"
+      |moduleDeps   = ["base"]
+      |sources      = ["invalid-path/"]
+      |targets      = ["js", "native"]
+      |
+      |[module.template.target.scss]
+      |root    = "."
+      |command = "yarn install && yarn run gulp"
+      |
+      |[module.bar]
+      |scalaVersion = "2.11.11"
+      |moduleDeps   = ["foo", "template"]
+      |sources      = ["invalid-path2/"]
+      |targets      = ["js", "native"]
+    """.stripMargin
+
+    val build = parseBuild(buildToml, Log.urgent)(_ => "")
+
+    assertEquals(
+      BuildConfig
+        .collectModuleDeps(
+          build,
+          BuildConfig.platformModule(build("bar").module, JavaScript).get,
+          JavaScript
+        ),
+      List("base2", "base", "foo", "template")
+    )
+
+    assertEquals(
+      BuildConfig.expandModules(build, List("bar" -> JavaScript)),
+      List(("base2", JavaScript), ("base", JavaScript))
     )
   }
 }
