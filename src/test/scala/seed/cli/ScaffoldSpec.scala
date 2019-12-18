@@ -39,7 +39,7 @@ object ScaffoldSpec extends SimpleTestSuite {
     assertEquals(module.ref, List("module", "example", "native"))
     assertEquals(
       module.values,
-      Map("root" -> Str("."), "sources" -> Arr(List(Str("src"))))
+      List("root" -> Str("."), "sources" -> Arr(List(Str("src"))))
     )
 
     assertEquals(result.nodes.length, 2)

@@ -133,7 +133,17 @@ object ProcessHelper {
       List("bloop") ++ args,
       modulePath,
       buildPath,
-      log,
+      new Log(log.f, log.map, log.level, log.unicode) {
+        override def error(message: String, detail: Boolean = false): Unit =
+          // This message is printed to stderr, but it is not an error, therefore
+          // change log level to 'debug'
+          if (message.contains("[D]"))
+            debug(message.dropWhile(_ != ' ').tail, detail)
+          else if (message.contains("[E]"))
+            super.error(message.dropWhile(_ != ' ').tail, detail)
+          else
+            super.error(message, detail)
+      },
       output => onStdOut(output),
       verbose
     )
