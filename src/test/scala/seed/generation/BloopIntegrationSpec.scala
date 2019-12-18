@@ -2,7 +2,7 @@ package seed.generation
 
 import java.nio.file.{Files, Path, Paths}
 
-import bloop.config.ConfigEncoderDecoders
+import bloop.config.ConfigCodecs
 import minitest.TestSuite
 import org.apache.commons.io.FileUtils
 import seed.{Log, cli}
@@ -24,12 +24,8 @@ object BloopIntegrationSpec extends TestSuite[Unit] {
   override def tearDown(env: Unit): Unit = ()
 
   def readBloopJson(path: Path): bloop.config.Config.File = {
-    val content = FileUtils.readFileToString(path.toFile, "UTF-8")
-
-    import io.circe.parser._
-    decode[bloop.config.Config.File](content)(
-      ConfigEncoderDecoders.allDecoder
-    ).right.get
+    val bytes = FileUtils.readFileToByteArray(path.toFile)
+    ConfigCodecs.read(bytes).right.get
   }
 
   def compileAndRun(projectPath: Path) = {

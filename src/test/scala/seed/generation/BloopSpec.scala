@@ -2,15 +2,15 @@ package seed.generation
 
 import java.nio.file.{Files, Path}
 
-import bloop.config.ConfigEncoderDecoders
+import bloop.config.ConfigCodecs
 import minitest.SimpleTestSuite
 import org.apache.commons.io.FileUtils
 import seed.generation.util.BuildUtil.tempPath
 
 object BloopSpec extends SimpleTestSuite {
   def parseBloopFile(path: Path): bloop.config.Config.File = {
-    val json = FileUtils.readFileToString(path.toFile, "UTF-8")
-    io.circe.parser.decode(json)(ConfigEncoderDecoders.allDecoder).right.get
+    val bytes = FileUtils.readFileToByteArray(path.toFile)
+    ConfigCodecs.read(bytes).right.get
   }
 
   test("Inherit javaDeps in child modules") {
