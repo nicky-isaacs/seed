@@ -478,6 +478,10 @@ object Bsp {
           if (message.contains("BSP server cancelled, closing socket..."))
             // Remove "[E] " from message
             debug(message.dropWhile(_ != ' ').tail)
+          else if (message.contains("[D]"))
+            debug(message.dropWhile(_ != ' ').tail, detail)
+          else if (message.contains("[E]"))
+            super.error(message.dropWhile(_ != ' ').tail, detail)
           else
             super.error(message, detail)
       },
